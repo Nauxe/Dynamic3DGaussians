@@ -126,6 +126,8 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
     with open(fps_path, 'w') as f:
         total_time = sum(timings)
         f.write("0") if total_time < 1e-5 else f.write(str(len(views) / total_time))
+    
+    print("", flush=True)
 
 
 if __name__ == "__main__":
@@ -144,5 +146,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    print(f"\n=== Sequence: {args.dataset} ===")
+    print(f"\n=== Sequence: {args.dataset} ===", flush=True)
+
     render_and_save(args.dataset, args.exp_name, args.output_dir, args.data_dir)
