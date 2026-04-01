@@ -8,10 +8,11 @@
 #SBATCH --output="slurm-out/train-%j.out"
 
 #SBATCH --mail-type=ALL 
-#SBATCH --mail-user=$SLURM_EMAIL
+#SBATCH --mail-user=
 
 source ~/.bashrc 
 
 conda activate 3dg
 
-python train.py
+# python train.py
+python train.py --save-checkpoints

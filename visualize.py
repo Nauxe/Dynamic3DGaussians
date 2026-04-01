@@ -239,5 +239,6 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", type=str, default="./output", help="Path to the output directory")
     args = parser.parse_args()
 
-    for sequence in ["basketball", "boxes", "football", "juggle", "softball", "tennis"]:
+    # for sequence in ["basketball", "boxes", "football", "juggle", "softball", "tennis"]:
+    for sequence in ["ball-blend"]:
         visualize(sequence, args.exp_name, args.output_dir)
