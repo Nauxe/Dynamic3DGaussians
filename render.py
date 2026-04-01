@@ -158,7 +158,7 @@ def render_checkpoints(seq: str, exp: str, out_dir: Path, data_dir: Path, iterat
             dst = gt_dir / name
             shutil.copy(src, dst)
             
-            print(f"Saved: t{t:04d}/cam{c:04d}/{name}")
+            # print(f"Saved: t{t:04d}/cam{c:04d}/{name}")
     
     print(f"\nRendered {len(checkpoints)} checkpoint(s) to {base_dir}")
 
