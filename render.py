@@ -66,16 +66,26 @@ def load_checkpoint_data(seq: str, exp: str, out_dir: Path, iteration: int = Non
 
 
 def load_scene_data(seq: str, exp: str, out_dir: Path) -> list[dict]:
-    """
-    Load per-timestep Gaussian params from params.npz,
-    return a list of length T where each entry is the dict
-    the renderer expects for that timestep.
+    """ 
+    Load per-timestep Gaussian params from params.npz, 
+    return a list of length T where each entry is the dict 
+    the renderer expects for that timestep. 
     """
     npz_path = out_dir / exp / seq / "params.npz"
-    raw = dict(np.load(npz_path))
-    params = {k: torch.tensor(v).cuda().float() for k, v in raw.items()}
+    raw = dict(np.load(npz_path, allow_pickle=True))
+
+    params = {}
+
+    for k, v in raw.items():
+        if v.dtype == object:
+            # already ragged → list
+            params[k] = [torch.tensor(x).cuda().float() for x in v]
+        else:
+            # stacked → split into list
+            params[k] = [torch.tensor(x).cuda().float() for x in v]
 
     T = params["means3D"].shape[0]
+
     scene = []
     for t in range(T):
         scene.append(
@@ -85,11 +95,12 @@ def load_scene_data(seq: str, exp: str, out_dir: Path) -> list[dict]:
                 "rotations": torch.nn.functional.normalize(
                     params["unnorm_rotations"][t]
                 ),
-                "opacities": torch.sigmoid(params["logit_opacities"]),
-                "scales": torch.exp(params["log_scales"]),
-                "means2D": torch.zeros_like(params["means3D"][0], device="cuda"),
+                "opacities": torch.sigmoid(params["logit_opacities"][t]),
+                "scales": torch.exp(params["log_scales"][t]),
+                "means2D": torch.zeros_like(params["means3D"][t], device="cuda"),
             }
         )
+
     return scene
 
 

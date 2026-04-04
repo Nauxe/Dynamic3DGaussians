@@ -93,10 +93,24 @@ def params2cpu(params, is_initial_timestep):
 
 def save_params(output_params, seq, exp, output_dir):
     to_save = {}
-    for k in output_params[0].keys():
-        if k in output_params[1].keys():
-            to_save[k] = np.stack([params[k] for params in output_params])
+
+    keys = set().union(*[p.keys() for p in output_params])
+
+    for k in keys:
+        arrays = [p[k] for p in output_params if k in p]
+
+        if len(arrays) != len(output_params):
+            to_save[k] = np.array(arrays, dtype=object)
+            continue
+
+        shapes = [arr.shape for arr in arrays if isinstance(arr, np.ndarray)]
+        if len(shapes) > 0 and all(s == shapes[0] for s in shapes):
+            try:
+                to_save[k] = np.stack(arrays)
+            except Exception:
+                to_save[k] = np.array(arrays, dtype=object)
         else:
-            to_save[k] = output_params[0][k]
+            to_save[k] = np.array(arrays, dtype=object)
+
     os.makedirs(f"{output_dir}/{exp}/{seq}", exist_ok=True)
-    np.savez(f"{output_dir}/{exp}/{seq}/params", **to_save)
+    np.savez(f"{output_dir}/{exp}/{seq}/params.npz", **to_save)
