@@ -425,12 +425,13 @@ def train(seq, exp, data_dir, output_dir, is_save_checkpoints):
             loss.backward()
             with torch.no_grad():
                 report_progress(params, dataset[0], i, current_loss, best_loss, window_avg, loss_history, window_size, progress_bar)
-                if is_initial_timestep or i <= 1000: 
+                # if is_initial_timestep or i <= 1000: 
+                if is_initial_timestep:
                     # first timestep: densify for first 500-5000 iter avery 100 iter 
                     # other timesteps: densify for first 500-1000 iter every 100 iter
                     params, variables = densify(params, variables, optimizer, i)
-                    if not is_initial_timestep:
-                        variables = recompute_neighbor_struct(params, variables)
+                    # if not is_initial_timestep:
+                    #     variables = recompute_neighbor_struct(params, variables)
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
                 

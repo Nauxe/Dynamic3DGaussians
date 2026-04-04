@@ -65,44 +65,50 @@ def load_checkpoint_data(seq: str, exp: str, out_dir: Path, iteration: int = Non
     return sorted(checkpoints, key=lambda x: (x['timestep'], x['iteration']))
 
 
-def load_scene_data(seq: str, exp: str, out_dir: Path) -> list[dict]:
-    """ 
-    Load per-timestep Gaussian params from params.npz, 
-    return a list of length T where each entry is the dict 
-    the renderer expects for that timestep. 
+def load_scene_data(seq: str, exp: str, out_dir: Path):
+    """
+    Load per-timestep scene parameters as a list of dicts.
+    Each parameter is converted to a PyTorch tensor on CUDA.
+    Constant keys are automatically broadcasted.
+    Optional keys (like camera or segmentation info) are preserved.
     """
     npz_path = out_dir / exp / seq / "params.npz"
     raw = dict(np.load(npz_path, allow_pickle=True))
 
+    T = max(len(v) for v in raw.values())
     params = {}
 
     for k, v in raw.items():
-        if v.dtype == object:
-            # already ragged → list
-            params[k] = [torch.tensor(x).cuda().float() for x in v]
-        else:
-            # stacked → split into list
-            params[k] = [torch.tensor(x).cuda().float() for x in v]
+        # Ensure v is a list of numeric arrays
+        v_list = []
+        for x in v:
+            if isinstance(x, np.ndarray):
+                arr = x.astype(np.float32)
+            elif np.isscalar(x):
+                arr = np.array([x], dtype=np.float32)
+            else:
+                arr = np.asarray(x, dtype=np.float32)
+            v_list.append(torch.from_numpy(arr).cuda())
 
-    T = params["means3D"].shape[0]
+        # Broadcast constants to all timesteps
+        if len(v_list) == 1:
+            v_list = v_list * T
 
+        params[k] = v_list
+
+    # Build per-timestep scene dicts
     scene = []
     for t in range(T):
-        scene.append(
-            {
-                "means3D": params["means3D"][t],
-                "colors_precomp": params["rgb_colors"][t],
-                "rotations": torch.nn.functional.normalize(
-                    params["unnorm_rotations"][t]
-                ),
-                "opacities": torch.sigmoid(params["logit_opacities"][t]),
-                "scales": torch.exp(params["log_scales"][t]),
-                "means2D": torch.zeros_like(params["means3D"][t], device="cuda"),
-            }
-        )
+        scene.append({
+            "means3D": params["means3D"][t],
+            "colors_precomp": params["rgb_colors"][t],
+            "rotations": torch.nn.functional.normalize(params["unnorm_rotations"][t]),
+            "opacities": torch.sigmoid(params["logit_opacities"][t]),
+            "scales": torch.exp(params["log_scales"][t]),
+            "means2D": torch.zeros_like(params["means3D"][t], device="cuda"),
+        })
 
     return scene
-
 
 def tensor_to_pil(im: torch.Tensor) -> Image.Image:
     """

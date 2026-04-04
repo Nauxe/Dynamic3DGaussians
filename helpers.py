@@ -92,25 +92,23 @@ def params2cpu(params, is_initial_timestep):
 
 
 def save_params(output_params, seq, exp, output_dir):
+    """
+    Save per-timestep parameters as lists (ragged arrays preserved).
+    Constant keys are broadcasted to all timesteps.
+    """
     to_save = {}
-
     keys = set().union(*[p.keys() for p in output_params])
+    T = len(output_params)
 
     for k in keys:
-        arrays = [p[k] for p in output_params if k in p]
+        arrays = [np.asarray(p[k], dtype=np.float32) for p in output_params if k in p]
 
-        if len(arrays) != len(output_params):
-            to_save[k] = np.array(arrays, dtype=object)
-            continue
+        # broadcast constant keys
+        if all(np.array_equal(arr, arrays[0]) for arr in arrays):
+            arrays = [arrays[0]] * T
 
-        shapes = [arr.shape for arr in arrays if isinstance(arr, np.ndarray)]
-        if len(shapes) > 0 and all(s == shapes[0] for s in shapes):
-            try:
-                to_save[k] = np.stack(arrays)
-            except Exception:
-                to_save[k] = np.array(arrays, dtype=object)
-        else:
-            to_save[k] = np.array(arrays, dtype=object)
+        # Store as object array (list of arrays)
+        to_save[k] = np.array(arrays, dtype=object)
 
     os.makedirs(f"{output_dir}/{exp}/{seq}", exist_ok=True)
     np.savez(f"{output_dir}/{exp}/{seq}/params.npz", **to_save)
