@@ -23,6 +23,7 @@ python render.py --exp-name sphere-bounce-5 --render-checkpoints-only
 python plot_losses.py
 
 cd output/sphere-bounce-5/sphere-bounce-5/test/ours-625x625/renders
-convert -delay 20 -loop 0 *0012.png myimage.gif
-mv myimage.gif ../../../renders-12.gif
+# convert -delay 20 -loop 0 *0012.png myimage.gif
+ffmpeg -f image2 -r 5 -pattern_type glob -i '*0012.png' -vcodec libx264 -crf 22 video.mp4 
+mv video.mp4 ../../../renders-12.mp4
 
