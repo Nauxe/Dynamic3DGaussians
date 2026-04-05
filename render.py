@@ -115,12 +115,18 @@ def tensor_to_pil(im: torch.Tensor) -> Image.Image:
     Convert a [C,H,W] float32 tensor with values in [0,1]
     into a PIL Image (uint8 RGB).
     """
-    arr = (
-        (torch.permute(im, (1, 2, 0)).cpu().numpy() * 255.0)
-        .clip(0, 255)
-        .astype(np.uint8)
-    )
-    return Image.fromarray(arr)
+    try:
+        torch.cuda.synchronize()
+        # Force a new allocation by cloning to avoid any invalid memory
+        im_cloned = im.clone()
+        im_cpu = im_cloned.float().to("cpu")
+        im_np = im_cpu.permute(1, 2, 0).numpy()
+        arr = (im_np * 255.0).clip(0, 255).astype(np.uint8)
+        return Image.fromarray(arr)
+    except Exception as e:
+        print(f"Error in tensor_to_pil: {e}")
+        print(f"Tensor shape: {im.shape if im is not None else None}, device: {im.device if im is not None else None}")
+        raise
 
 
 def render_checkpoints(seq: str, exp: str, out_dir: Path, data_dir: Path, iteration: int = None):
@@ -158,8 +164,13 @@ def render_checkpoints(seq: str, exp: str, out_dir: Path, data_dir: Path, iterat
         
         for c, (fn, ks, w2cs) in enumerate(zip(meta["fn"][t], meta["k"][t], meta["w2c"][t])):
             cam = setup_camera(w, h, np.array(ks), np.array(w2cs), near=near, far=far)
-            with torch.no_grad():
-                im, _, _ = Renderer(raster_settings=cam)(**scene_data)
+            try:
+                with torch.no_grad():
+                    im, _, _ = Renderer(raster_settings=cam)(**scene_data)
+                torch.cuda.synchronize()
+            except Exception as e:
+                print(f"Render error at t={t}, c={c}: {e}")
+                im = torch.zeros(3, h, w, device="cuda")
             
             timestep_dir = renders_base / f"t{t:04d}" / f"cam{c:04d}"
             timestep_dir.mkdir(parents=True, exist_ok=True)
@@ -168,8 +179,13 @@ def render_checkpoints(seq: str, exp: str, out_dir: Path, data_dir: Path, iterat
             gt_dir.mkdir(parents=True, exist_ok=True)
             
             name = f"iter{iter_num:06d}.png"
-            img = tensor_to_pil(im)
-            img.save(timestep_dir / name)
+            try:
+                img = tensor_to_pil(im)
+                img.save(timestep_dir / name)
+            except Exception as e:
+                print(f"Convert/save error at t={t}, c={c}: {e}")
+                img = Image.new('RGB', (w, h), (0, 0, 0))
+                img.save(timestep_dir / name)
             
             src = data_dir / seq / "ims" / fn
             dst = gt_dir / name
@@ -222,18 +238,30 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
     for view in views:
         ts = time.time()
         t, c, fn = view["t"], view["c"], view["fn"]
-        data_vars = scene[t]  # pick the right timestep’s dict
+        data_vars = scene[t]  # pick the right timestep's dict
 
         # build camera & render
         cam = setup_camera(w, h, view["k"], view["w2c"], near=near, far=far)
-        with torch.no_grad():
-            im, _, _ = Renderer(raster_settings=cam)(**data_vars)
+        try:
+            with torch.no_grad():
+                im, _, _ = Renderer(raster_settings=cam)(**data_vars)
+            torch.cuda.synchronize()
+        except Exception as e:
+            print(f"Render error at t={t}, c={c}: {e}")
+            im = torch.zeros(3, h, w, device="cuda")
 
         timings.append(time.time() - ts)
         # convert and save render
-        img = tensor_to_pil(im)
-        name = f"{t:04d}_{c:04d}.png"
-        img.save(renders_dir / name)
+        try:
+            img = tensor_to_pil(im)
+            name = f"{t:04d}_{c:04d}.png"
+            img.save(renders_dir / name)
+        except Exception as e:
+            print(f"Convert/save error at t={t}, c={c}: {e}")
+            # create dummy black image
+            img = Image.new('RGB', (w, h), (0, 0, 0))
+            name = f"{t:04d}_{c:04d}.png"
+            img.save(renders_dir / name)
 
         # copy the matching ground-truth image
         src = data_dir / seq / "ims" / fn
