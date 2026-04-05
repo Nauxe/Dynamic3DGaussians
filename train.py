@@ -157,6 +157,15 @@ def get_loss(params, curr_data, variables, is_initial_timestep):
 def initialize_per_timestep(params, variables, optimizer):
     pts = params['means3D']
     rot = torch.nn.functional.normalize(params['unnorm_rotations'])
+    
+    old_num_pts = variables["prev_pts"].shape[0]
+    new_num_pts = pts.shape[0]
+    if new_num_pts > old_num_pts:
+        new_pts_only = pts[old_num_pts:].detach()
+        new_rot_only = rot[old_num_pts:].detach()
+        variables["prev_pts"] = torch.cat([variables["prev_pts"], new_pts_only], dim=0)
+        variables["prev_rot"] = torch.cat([variables["prev_rot"], new_rot_only], dim=0)
+    
     new_pts = pts + (pts - variables["prev_pts"])
     new_rot = torch.nn.functional.normalize(rot + (rot - variables["prev_rot"]))
 
