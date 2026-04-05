@@ -183,11 +183,10 @@ def render_checkpoints(seq: str, exp: str, out_dir: Path, data_dir: Path, iterat
         }
         
         for c, (fn, ks, w2cs) in enumerate(zip(meta["fn"][t], meta["k"][t], meta["w2c"][t])):
-            cam = setup_camera(w, h, np.array(ks), np.array(w2cs), near=near, far=far)
             try:
+                cam = setup_camera(w, h, np.array(ks), np.array(w2cs), near=near, far=far)
                 with torch.no_grad():
                     im, _, _ = Renderer(raster_settings=cam)(**scene_data)
-                torch.cuda.synchronize()
             except Exception as e:
                 print(f"Render error at t={t}, c={c}: {e}")
                 # Create black image on CPU instead of using CUDA
@@ -262,11 +261,10 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
         data_vars = scene[t]  # pick the right timestep's dict
 
         # build camera & render
-        cam = setup_camera(w, h, view["k"], view["w2c"], near=near, far=far)
         try:
+            cam = setup_camera(w, h, view["k"], view["w2c"], near=near, far=far)
             with torch.no_grad():
                 im, _, _ = Renderer(raster_settings=cam)(**data_vars)
-            torch.cuda.synchronize()
         except Exception as e:
             print(f"Render error at t={t}, c={c}: {e}")
             im = torch.zeros(3, h, w, dtype=torch.float32)
