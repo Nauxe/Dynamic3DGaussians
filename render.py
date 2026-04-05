@@ -41,21 +41,27 @@ def load_checkpoint_data(seq: str, exp: str, out_dir: Path, iteration: int = Non
     checkpoints = []
     for cp_file in checkpoint_files:
         raw = dict(np.load(cp_file))
-        params = {k: torch.tensor(v).cuda().float() for k, v in raw.items()}
+        params = {k: torch.tensor(v).clone().cuda().float() for k, v in raw.items()}
         
         # Extract timestep and iteration from filename
         filename = cp_file.stem
         parts = filename.split('_')
         t = int(parts[1]) if 'timestep' in filename else 0
         iter_num = int(parts[-1].replace('iter_', '')) if 'iter_' in filename else 0
+
+        # Defensive: check for NaN/Inf
+        means3D = params["means3D"]
+        if torch.isnan(means3D).any() or torch.isinf(means3D).any():
+            print(f"Warning: checkpoint {cp_file.name} has NaN/Inf in means3D")
+            means3D = torch.nan_to_num(means3D, nan=0.0, posinf=1.0, neginf=-1.0)
         
         scene_entry = {
-            "means3D": params["means3D"],
+            "means3D": means3D,
             "colors_precomp": params["rgb_colors"],
             "rotations": torch.nn.functional.normalize(params["unnorm_rotations"]),
             "opacities": torch.sigmoid(params.get("logit_opacities", torch.zeros(1))),
             "scales": torch.exp(params.get("log_scales", torch.zeros(1))),
-            "means2D": torch.zeros_like(params["means3D"], device="cuda"),
+            "means2D": torch.zeros_like(means3D, device="cuda"),
             "timestep": t,
             "iteration": iter_num,
             "filename": str(cp_file.name)
@@ -88,7 +94,7 @@ def load_scene_data(seq: str, exp: str, out_dir: Path):
                 arr = np.array([x], dtype=np.float32)
             else:
                 arr = np.asarray(x, dtype=np.float32)
-            v_list.append(torch.from_numpy(arr).cuda())
+            v_list.append(torch.from_numpy(arr).clone().cuda())
 
         # Broadcast constants to all timesteps
         if len(v_list) == 1:
@@ -99,13 +105,28 @@ def load_scene_data(seq: str, exp: str, out_dir: Path):
     # Build per-timestep scene dicts
     scene = []
     for t in range(T):
+        # Defensive: ensure tensors are valid before creating scene
+        means3D = params["means3D"][t]
+        rgb_colors = params["rgb_colors"][t]
+        unnorm_rotations = params["unnorm_rotations"][t]
+        logit_opacities = params["logit_opacities"][t]
+        log_scales = params["log_scales"][t]
+
+        # Check for NaN/Inf
+        if torch.isnan(means3D).any() or torch.isinf(means3D).any():
+            print(f"Warning: means3D has NaN/Inf at timestep {t}")
+            means3D = torch.nan_to_num(means3D, nan=0.0, posinf=1.0, neginf=-1.0)
+        if torch.isnan(unnorm_rotations).any() or torch.isinf(unnorm_rotations).any():
+            print(f"Warning: unnorm_rotations has NaN/Inf at timestep {t}")
+            unnorm_rotations = torch.nan_to_num(unnorm_rotations, nan=0.0, posinf=1.0, neginf=-1.0)
+
         scene.append({
-            "means3D": params["means3D"][t],
-            "colors_precomp": params["rgb_colors"][t],
-            "rotations": torch.nn.functional.normalize(params["unnorm_rotations"][t]),
-            "opacities": torch.sigmoid(params["logit_opacities"][t]),
-            "scales": torch.exp(params["log_scales"][t]),
-            "means2D": torch.zeros_like(params["means3D"][t], device="cuda"),
+            "means3D": means3D,
+            "colors_precomp": rgb_colors,
+            "rotations": torch.nn.functional.normalize(unnorm_rotations),
+            "opacities": torch.sigmoid(logit_opacities),
+            "scales": torch.exp(log_scales),
+            "means2D": torch.zeros_like(means3D, device="cuda"),
         })
 
     return scene
@@ -116,7 +137,6 @@ def tensor_to_pil(im: torch.Tensor) -> Image.Image:
     into a PIL Image (uint8 RGB).
     """
     try:
-        torch.cuda.synchronize()
         # Force a new allocation by cloning to avoid any invalid memory
         im_cloned = im.clone()
         im_cpu = im_cloned.float().to("cpu")
@@ -170,7 +190,8 @@ def render_checkpoints(seq: str, exp: str, out_dir: Path, data_dir: Path, iterat
                 torch.cuda.synchronize()
             except Exception as e:
                 print(f"Render error at t={t}, c={c}: {e}")
-                im = torch.zeros(3, h, w, device="cuda")
+                # Create black image on CPU instead of using CUDA
+                im = torch.zeros(3, h, w, dtype=torch.float32)
             
             timestep_dir = renders_base / f"t{t:04d}" / f"cam{c:04d}"
             timestep_dir.mkdir(parents=True, exist_ok=True)
@@ -248,7 +269,7 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
             torch.cuda.synchronize()
         except Exception as e:
             print(f"Render error at t={t}, c={c}: {e}")
-            im = torch.zeros(3, h, w, device="cuda")
+            im = torch.zeros(3, h, w, dtype=torch.float32)
 
         timings.append(time.time() - ts)
         # convert and save render
