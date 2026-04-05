@@ -112,13 +112,32 @@ def load_scene_data(seq: str, exp: str, out_dir: Path):
         logit_opacities = params["logit_opacities"][t]
         log_scales = params["log_scales"][t]
 
-        # Check for NaN/Inf
-        if torch.isnan(means3D).any() or torch.isinf(means3D).any():
-            print(f"Warning: means3D has NaN/Inf at timestep {t}")
-            means3D = torch.nan_to_num(means3D, nan=0.0, posinf=1.0, neginf=-1.0)
-        if torch.isnan(unnorm_rotations).any() or torch.isinf(unnorm_rotations).any():
-            print(f"Warning: unnorm_rotations has NaN/Inf at timestep {t}")
-            unnorm_rotations = torch.nan_to_num(unnorm_rotations, nan=0.0, posinf=1.0, neginf=-1.0)
+        # Check all params for NaN/Inf and report
+        for param_name, param_tensor in [
+            ("means3D", means3D),
+            ("rgb_colors", rgb_colors),
+            ("unnorm_rotations", unnorm_rotations),
+            ("logit_opacities", logit_opacities),
+            ("log_scales", log_scales),
+        ]:
+            if torch.isnan(param_tensor).any() or torch.isinf(param_tensor).any():
+                nan_count = torch.isnan(param_tensor).sum().item()
+                inf_count = torch.isinf(param_tensor).sum().item()
+                print(f"Warning: {param_name} has NaN/Inf at timestep {t} (NaN: {nan_count}, Inf: {inf_count})")
+                if param_name == "means3D":
+                    means3D = torch.nan_to_num(means3D, nan=0.0, posinf=1.0, neginf=-1.0)
+                elif param_name == "rgb_colors":
+                    rgb_colors = torch.nan_to_num(rgb_colors, nan=0.0, posinf=1.0, neginf=-1.0)
+                elif param_name == "unnorm_rotations":
+                    unnorm_rotations = torch.nan_to_num(unnorm_rotations, nan=0.0, posinf=1.0, neginf=-1.0)
+                elif param_name == "logit_opacities":
+                    logit_opacities = torch.nan_to_num(logit_opacities, nan=0.0, posinf=1.0, neginf=-1.0)
+                elif param_name == "log_scales":
+                    log_scales = torch.nan_to_num(log_scales, nan=0.0, posinf=1.0, neginf=-1.0)
+
+        # Additional validation for means3D range
+        if (means3D.abs() > 1e6).any():
+            print(f"Warning: means3D has extreme values at timestep {t}")
 
         scene.append({
             "means3D": means3D,
