@@ -154,7 +154,7 @@ def get_loss(params, curr_data, variables, is_initial_timestep):
     return loss, variables, loss_components
 
 
-def initialize_per_timestep(params, variables, optimizer):
+def initialize_per_timestep(params, variables, optimizer, num_knn=20):
     pts = params['means3D']
     rot = torch.nn.functional.normalize(params['unnorm_rotations'])
     
@@ -165,11 +165,29 @@ def initialize_per_timestep(params, variables, optimizer):
         new_rot_only = rot[old_num_pts:].detach()
         variables["prev_pts"] = torch.cat([variables["prev_pts"], new_pts_only], dim=0)
         variables["prev_rot"] = torch.cat([variables["prev_rot"], new_rot_only], dim=0)
+        
+        old_col_num = variables["prev_col"].shape[0] if "prev_col" in variables else 0
+        if new_num_pts > old_col_num:
+            new_colors = params['rgb_colors'][old_col_num:].detach()
+            variables["prev_col"] = torch.cat([variables["prev_col"], new_colors], dim=0)
+        
+        is_fg = params['seg_colors'][:, 0] > 0.5
+        old_bg_pts = variables["init_bg_pts"].shape[0] if "init_bg_pts" in variables else 0
+        new_bg_pts = (~is_fg).sum().item()
+        if new_bg_pts > old_bg_pts:
+            new_bg_pts_only = pts[~is_fg][old_bg_pts:].detach()
+            new_bg_rot_only = rot[~is_fg][old_bg_pts:].detach()
+            variables["init_bg_pts"] = torch.cat([variables["init_bg_pts"], new_bg_pts_only], dim=0)
+            variables["init_bg_rot"] = torch.cat([variables["init_bg_rot"], new_bg_rot_only], dim=0)
     
     new_pts = pts + (pts - variables["prev_pts"])
     new_rot = torch.nn.functional.normalize(rot + (rot - variables["prev_rot"]))
 
     is_fg = params['seg_colors'][:, 0] > 0.5
+    old_fg_count = variables["neighbor_indices"].shape[0] if "neighbor_indices" in variables and variables["neighbor_indices"] is not None else 0
+    if is_fg.sum() != old_fg_count:
+        variables = recompute_neighbor_struct(params, variables, num_knn)
+    
     prev_inv_rot_fg = rot[is_fg]
     prev_inv_rot_fg[:, 1:] = -1 * prev_inv_rot_fg[:, 1:]
     fg_pts = pts[is_fg]
