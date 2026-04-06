@@ -268,12 +268,8 @@ def save_checkpoint(params, output_params, is_initial_timestep, output_dir, exp,
             to_save = checkpoint_params
         else:
             for k in checkpoint_params.keys():
-                if k in ['means3D', 'rgb_colors', 'unnorm_rotations']:
+                if k in ['means3D', 'rgb_colors', 'unnorm_rotations', 'logit_opacities', 'log_scales']:
                     to_save[k] = checkpoint_params[k]
-            # Pad with zeros for missing keys from first timestep
-            for k in ['seg_colors', 'logit_opacities', 'log_scales', 'cam_m', 'cam_c']:
-                if k not in to_save:
-                    to_save[k] = output_params[0].get(k, np.array([]))
         
         np.savez(checkpoint_file, **to_save)
 

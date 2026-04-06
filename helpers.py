@@ -87,7 +87,7 @@ def params2cpu(params, is_initial_timestep):
         res = {k: v.detach().cpu().contiguous().numpy() for k, v in params.items()}
     else:
         res = {k: v.detach().cpu().contiguous().numpy() for k, v in params.items() if
-               k in ['means3D', 'rgb_colors', 'unnorm_rotations']}
+               k in ['means3D', 'rgb_colors', 'unnorm_rotations', 'logit_opacities', 'log_scales']}
     return res
 
 
