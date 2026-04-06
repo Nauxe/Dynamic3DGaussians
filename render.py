@@ -156,9 +156,8 @@ def tensor_to_pil(im: torch.Tensor) -> Image.Image:
     into a PIL Image (uint8 RGB).
     """
     try:
-        # Force a new allocation by cloning to avoid any invalid memory
-        im_cloned = im.clone()
-        im_cpu = im_cloned.float().to("cpu")
+        # Force a new allocation by cloning to CPU directly
+        im_cpu = im.float().clone().cpu()
         im_np = im_cpu.permute(1, 2, 0).numpy()
         arr = (im_np * 255.0).clip(0, 255).astype(np.uint8)
         return Image.fromarray(arr)
@@ -208,8 +207,7 @@ def render_checkpoints(seq: str, exp: str, out_dir: Path, data_dir: Path, iterat
                     im, _, _ = Renderer(raster_settings=cam)(**scene_data)
             except Exception as e:
                 print(f"Render error at t={t}, c={c}: {e}")
-                # Create black image on CPU instead of using CUDA
-                im = torch.zeros(3, h, w, dtype=torch.float32)
+                im = torch.zeros(3, h, w, dtype=torch.float32, device="cpu")
             
             timestep_dir = renders_base / f"t{t:04d}" / f"cam{c:04d}"
             timestep_dir.mkdir(parents=True, exist_ok=True)
@@ -225,6 +223,11 @@ def render_checkpoints(seq: str, exp: str, out_dir: Path, data_dir: Path, iterat
                 print(f"Convert/save error at t={t}, c={c}: {e}")
                 img = Image.new('RGB', (w, h), (0, 0, 0))
                 img.save(timestep_dir / name)
+            
+            # Reset CUDA periodically to clear corrupted state
+            if c % 10 == 0:
+                torch.cuda.synchronize()
+                torch.cuda.empty_cache()
             
             src = data_dir / seq / "ims" / fn
             dst = gt_dir / name
@@ -286,7 +289,7 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
                 im, _, _ = Renderer(raster_settings=cam)(**data_vars)
         except Exception as e:
             print(f"Render error at t={t}, c={c}: {e}")
-            im = torch.zeros(3, h, w, dtype=torch.float32)
+            im = torch.zeros(3, h, w, dtype=torch.float32, device="cpu")
 
         timings.append(time.time() - ts)
         # convert and save render
@@ -300,6 +303,11 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
             img = Image.new('RGB', (w, h), (0, 0, 0))
             name = f"{t:04d}_{c:04d}.png"
             img.save(renders_dir / name)
+        
+        # Reset CUDA device periodically to clear any corrupted state
+        if (t * 100 + c) % 50 == 0:
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
 
         # copy the matching ground-truth image
         src = data_dir / seq / "ims" / fn
