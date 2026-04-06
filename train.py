@@ -88,10 +88,10 @@ def get_loss(params, curr_data, variables, is_initial_timestep):
     losses['im'] = 0.8 * l1_loss_v1(im, curr_data['im']) + 0.2 * (1.0 - calc_ssim(im, curr_data['im']))
     variables['means2D'] = rendervar['means2D']  # Gradient only accum from colour render for densification
 
-    segrendervar = params2rendervar(params)
-    segrendervar['colors_precomp'] = params['seg_colors']
-    seg, _, _, = Renderer(raster_settings=curr_data['cam'])(**segrendervar)
-    losses['seg'] = 0.8 * l1_loss_v1(seg, curr_data['seg']) + 0.2 * (1.0 - calc_ssim(seg, curr_data['seg']))
+    # segrendervar = params2rendervar(params)
+    # segrendervar['colors_precomp'] = params['seg_colors']
+    # seg, _, _, = Renderer(raster_settings=curr_data['cam'])(**segrendervar)
+    # losses['seg'] = 0.8 * l1_loss_v1(seg, curr_data['seg']) + 0.2 * (1.0 - calc_ssim(seg, curr_data['seg']))
 
     if not is_initial_timestep:
         is_fg = (params['seg_colors'][:, 0] > 0.5).detach()
@@ -110,14 +110,14 @@ def get_loss(params, curr_data, variables, is_initial_timestep):
                                             variables["neighbor_weight"])
 
         curr_offset_mag = torch.sqrt((curr_offset ** 2).sum(-1) + 1e-20)
-        losses['iso'] = weighted_l2_loss_v1(curr_offset_mag, variables["neighbor_dist"], variables["neighbor_weight"])
+        # losses['iso'] = weighted_l2_loss_v1(curr_offset_mag, variables["neighbor_dist"], variables["neighbor_weight"])
 
-        losses['floor'] = torch.clamp(fg_pts[:, 1], min=0).mean()
-
-        bg_pts = rendervar['means3D'][~is_fg]
-        bg_rot = rendervar['rotations'][~is_fg]
-        losses['bg'] = l1_loss_v2(bg_pts, variables["init_bg_pts"]) + l1_loss_v2(bg_rot, variables["init_bg_rot"])
-
+        # losses['floor'] = torch.clamp(fg_pts[:, 1], min=0).mean()
+        #
+        # bg_pts = rendervar['means3D'][~is_fg]
+        # bg_rot = rendervar['rotations'][~is_fg]
+        # losses['bg'] = l1_loss_v2(bg_pts, variables["init_bg_pts"]) + l1_loss_v2(bg_rot, variables["init_bg_rot"])
+        
         losses['soft_col_cons'] = l1_loss_v2(params['rgb_colors'], variables["prev_col"])
 
     loss_weights = {'im': 1.0, 'seg': 3.0, 'rigid': 4.0, 'rot': 4.0, 'iso': 2.0, 'floor': 2.0, 'bg': 20.0,
