@@ -205,6 +205,7 @@ def render_checkpoints(seq: str, exp: str, out_dir: Path, data_dir: Path, iterat
                 cam = setup_camera(w, h, np.array(ks), np.array(w2cs), near=near, far=far)
                 with torch.no_grad():
                     im, _, _ = Renderer(raster_settings=cam)(**scene_data)
+                im = im.float().clone().cpu()
             except Exception as e:
                 print(f"Render error at t={t}, c={c}: {e}")
                 im = torch.zeros(3, h, w, dtype=torch.float32, device="cpu")
@@ -287,6 +288,8 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
             cam = setup_camera(w, h, view["k"], view["w2c"], near=near, far=far)
             with torch.no_grad():
                 im, _, _ = Renderer(raster_settings=cam)(**data_vars)
+            # Immediately copy to CPU to avoid CUDA memory corruption
+            im = im.float().clone().cpu()
         except Exception as e:
             print(f"Render error at t={t}, c={c}: {e}")
             im = torch.zeros(3, h, w, dtype=torch.float32, device="cpu")
