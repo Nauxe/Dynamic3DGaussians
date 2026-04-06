@@ -208,8 +208,11 @@ def render_checkpoints(seq: str, exp: str, out_dir: Path, data_dir: Path, iterat
                 im = im.float().clone().cpu()
             except Exception as e:
                 print(f"Render error at t={t}, c={c}: {e}")
-                torch.cuda.synchronize()
-                torch.cuda.empty_cache()
+                try:
+                    torch.cuda.synchronize()
+                    torch.cuda.empty_cache()
+                except:
+                    pass
                 im = torch.zeros(3, h, w, dtype=torch.float32, device="cpu")
             
             timestep_dir = renders_base / f"t{t:04d}" / f"cam{c:04d}"
@@ -224,15 +227,21 @@ def render_checkpoints(seq: str, exp: str, out_dir: Path, data_dir: Path, iterat
                 img.save(timestep_dir / name)
             except Exception as e:
                 print(f"Convert/save error at t={t}, c={c}: {e}")
-                torch.cuda.synchronize()
-                torch.cuda.empty_cache()
+                try:
+                    torch.cuda.synchronize()
+                    torch.cuda.empty_cache()
+                except:
+                    pass
                 img = Image.new('RGB', (w, h), (0, 0, 0))
                 img.save(timestep_dir / name)
             
             # Reset CUDA periodically to clear corrupted state
             if c % 10 == 0:
-                torch.cuda.synchronize()
-                torch.cuda.empty_cache()
+                try:
+                    torch.cuda.synchronize()
+                    torch.cuda.empty_cache()
+                except:
+                    pass
             
             src = data_dir / seq / "ims" / fn
             dst = gt_dir / name
@@ -296,10 +305,19 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
             im = im.float().clone().cpu()
         except Exception as e:
             print(f"Render error at t={t}, c={c}: {e}")
-            # Reset CUDA context on error
-            torch.cuda.synchronize()
-            torch.cuda.empty_cache()
-            torch.cuda.reset_peak_memory_stats()
+            # Try to recover CUDA - if that fails, restart the process
+            try:
+                torch.cuda.synchronize()
+                torch.cuda.empty_cache()
+            except:
+                print("CUDA context corrupted, attempting recovery...")
+                # Force garbage collection and retry
+                import gc
+                gc.collect()
+                try:
+                    torch.cuda.reset_accumulated_memory_stats()
+                except:
+                    pass
             im = torch.zeros(3, h, w, dtype=torch.float32, device="cpu")
 
         timings.append(time.time() - ts)
@@ -310,8 +328,11 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
             img.save(renders_dir / name)
         except Exception as e:
             print(f"Convert/save error at t={t}, c={c}: {e}")
-            torch.cuda.synchronize()
-            torch.cuda.empty_cache()
+            try:
+                torch.cuda.synchronize()
+                torch.cuda.empty_cache()
+            except:
+                pass
             # create dummy black image
             img = Image.new('RGB', (w, h), (0, 0, 0))
             name = f"{t:04d}_{c:04d}.png"
@@ -319,8 +340,11 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
         
         # Reset CUDA device periodically to clear any corrupted state
         if (t * 100 + c) % 50 == 0:
-            torch.cuda.synchronize()
-            torch.cuda.empty_cache()
+            try:
+                torch.cuda.synchronize()
+                torch.cuda.empty_cache()
+            except:
+                pass
 
         # copy the matching ground-truth image
         src = data_dir / seq / "ims" / fn
