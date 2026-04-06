@@ -51,12 +51,24 @@ def load_checkpoint_data(seq: str, exp: str, out_dir: Path, iteration: int = Non
         t = int(parts[1]) if 'timestep' in filename else 0
         iter_num = int(parts[-1].replace('iter_', '')) if 'iter_' in filename else 0
         
+        num_pts = params["means3D"].shape[0]
+        
+        logit_op = params.get("logit_opacities", torch.zeros(num_pts, 1, device="cuda"))
+        log_sc = params.get("log_scales", torch.zeros(num_pts, 3, device="cuda"))
+        
+        if logit_op.shape[0] != num_pts:
+            print(f"Warning: checkpoint {cp_file.name} opacities shape {logit_op.shape[0]} != means3D {num_pts}, resizing")
+            logit_op = torch.zeros(num_pts, 1, device="cuda")
+        if log_sc.shape[0] != num_pts:
+            print(f"Warning: checkpoint {cp_file.name} scales shape {log_sc.shape[0]} != means3D {num_pts}, resizing")
+            log_sc = torch.zeros(num_pts, 3, device="cuda")
+        
         scene_entry = {
             "means3D": params["means3D"],
             "colors_precomp": params["rgb_colors"],
             "rotations": torch.nn.functional.normalize(params["unnorm_rotations"]),
-            "opacities": torch.sigmoid(params.get("logit_opacities", torch.zeros(1))),
-            "scales": torch.exp(params.get("log_scales", torch.zeros(1))),
+            "opacities": torch.sigmoid(logit_op),
+            "scales": torch.exp(log_sc),
             "means2D": torch.zeros_like(params["means3D"], device="cuda"),
             "timestep": t,
             "iteration": iter_num,
@@ -101,13 +113,28 @@ def load_scene_data(seq: str, exp: str, out_dir: Path):
     # Build per-timestep scene dicts
     scene = []
     for t in range(T):
+        means3D = params["means3D"][t]
+        rgb_colors = params["rgb_colors"][t]
+        unnorm_rotations = params["unnorm_rotations"][t]
+        logit_opacities = params["logit_opacities"][t]
+        log_scales = params["log_scales"][t]
+        
+        num_pts = means3D.shape[0]
+        
+        if logit_opacities.shape[0] != num_pts:
+            print(f"Warning: timestep {t} opacities shape {logit_opacities.shape[0]} != means3D {num_pts}, resizing")
+            logit_opacities = torch.zeros(num_pts, 1, device="cuda")
+        if log_scales.shape[0] != num_pts:
+            print(f"Warning: timestep {t} scales shape {log_scales.shape[0]} != means3D {num_pts}, resizing")
+            log_scales = torch.zeros(num_pts, 3, device="cuda")
+        
         scene.append({
-            "means3D": params["means3D"][t],
-            "colors_precomp": params["rgb_colors"][t],
-            "rotations": torch.nn.functional.normalize(params["unnorm_rotations"][t]),
-            "opacities": torch.sigmoid(params["logit_opacities"][t]),
-            "scales": torch.exp(params["log_scales"][t]),
-            "means2D": torch.zeros_like(params["means3D"][t], device="cuda"),
+            "means3D": means3D,
+            "colors_precomp": rgb_colors,
+            "rotations": torch.nn.functional.normalize(unnorm_rotations),
+            "opacities": torch.sigmoid(logit_opacities),
+            "scales": torch.exp(log_scales),
+            "means2D": torch.zeros_like(means3D, device="cuda"),
         })
 
     return scene
