@@ -208,6 +208,8 @@ def render_checkpoints(seq: str, exp: str, out_dir: Path, data_dir: Path, iterat
                 im = im.float().clone().cpu()
             except Exception as e:
                 print(f"Render error at t={t}, c={c}: {e}")
+                torch.cuda.synchronize()
+                torch.cuda.empty_cache()
                 im = torch.zeros(3, h, w, dtype=torch.float32, device="cpu")
             
             timestep_dir = renders_base / f"t{t:04d}" / f"cam{c:04d}"
@@ -222,6 +224,8 @@ def render_checkpoints(seq: str, exp: str, out_dir: Path, data_dir: Path, iterat
                 img.save(timestep_dir / name)
             except Exception as e:
                 print(f"Convert/save error at t={t}, c={c}: {e}")
+                torch.cuda.synchronize()
+                torch.cuda.empty_cache()
                 img = Image.new('RGB', (w, h), (0, 0, 0))
                 img.save(timestep_dir / name)
             
@@ -292,6 +296,10 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
             im = im.float().clone().cpu()
         except Exception as e:
             print(f"Render error at t={t}, c={c}: {e}")
+            # Reset CUDA context on error
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+            torch.cuda.reset_peak_memory_stats()
             im = torch.zeros(3, h, w, dtype=torch.float32, device="cpu")
 
         timings.append(time.time() - ts)
@@ -302,6 +310,8 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
             img.save(renders_dir / name)
         except Exception as e:
             print(f"Convert/save error at t={t}, c={c}: {e}")
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
             # create dummy black image
             img = Image.new('RGB', (w, h), (0, 0, 0))
             name = f"{t:04d}_{c:04d}.png"
