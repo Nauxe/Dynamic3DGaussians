@@ -157,25 +157,31 @@ def get_loss(params, curr_data, variables, is_initial_timestep):
 def initialize_per_timestep(params, variables, optimizer):
     pts = params['means3D']
     rot = torch.nn.functional.normalize(params['unnorm_rotations'])
-    
-    old_num_pts = variables["prev_pts"].shape[0]
-    new_num_pts = pts.shape[0]
-    if new_num_pts > old_num_pts:
-        new_pts_only = pts[old_num_pts:].detach()
-        new_rot_only = rot[old_num_pts:].detach()
-        variables["prev_pts"] = torch.cat([variables["prev_pts"], new_pts_only], dim=0)
-        variables["prev_rot"] = torch.cat([variables["prev_rot"], new_rot_only], dim=0)
-    
+
+    is_fg = params['seg_colors'][:, 0] > 0.5
+    old_fg_count = variables["neighbor_indices"].shape[0] if "neighbor_indices" in variables else 0
+
+    if is_fg.sum() != old_fg_count:
+        variables = recompute_neighbor_struct(params, variables)
+    else:
+        old_num_pts = variables["prev_pts"].shape[0]
+        new_num_pts = pts.shape[0]
+        if new_num_pts > old_num_pts:
+            new_pts_only = pts[old_num_pts:].detach()
+            new_rot_only = rot[old_num_pts:].detach()
+            variables["prev_pts"] = torch.cat([variables["prev_pts"], new_pts_only], dim=0)
+            variables["prev_rot"] = torch.cat([variables["prev_rot"], new_rot_only], dim=0)
+
+        prev_inv_rot_fg = rot[is_fg]
+        prev_inv_rot_fg[:, 1:] = -1 * prev_inv_rot_fg[:, 1:]
+        fg_pts = pts[is_fg]
+        prev_offset = fg_pts[variables["neighbor_indices"]] - fg_pts[:, None]
+        variables['prev_inv_rot_fg'] = prev_inv_rot_fg.detach()
+        variables['prev_offset'] = prev_offset.detach()
+
     new_pts = pts + (pts - variables["prev_pts"])
     new_rot = torch.nn.functional.normalize(rot + (rot - variables["prev_rot"]))
 
-    is_fg = params['seg_colors'][:, 0] > 0.5
-    prev_inv_rot_fg = rot[is_fg]
-    prev_inv_rot_fg[:, 1:] = -1 * prev_inv_rot_fg[:, 1:]
-    fg_pts = pts[is_fg]
-    prev_offset = fg_pts[variables["neighbor_indices"]] - fg_pts[:, None]
-    variables['prev_inv_rot_fg'] = prev_inv_rot_fg.detach()
-    variables['prev_offset'] = prev_offset.detach()
     variables["prev_col"] = params['rgb_colors'].detach()
     variables["prev_pts"] = pts.detach()
     variables["prev_rot"] = rot.detach()
