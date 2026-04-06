@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import time
 from argparse import ArgumentParser
@@ -21,6 +22,7 @@ near, far = 0.01, 100.0
 # METHOD = "ours"
 METHOD = "ours-625x625"
 
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def load_checkpoint_data(seq: str, exp: str, out_dir: Path, iteration: int = None) -> list[dict]:
     """
