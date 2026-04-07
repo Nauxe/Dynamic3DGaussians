@@ -313,7 +313,7 @@ def train(seq, exp, data_dir, output_dir, is_save_checkpoints):
         # num_iter_per_timestep = 30000 if is_initial_timestep else 2000
         i = 0
         max_iter = 100000 if is_initial_timestep else 30000 # Initial: 100000
-        min_iter = 20000 if is_initial_timestep else 3000 # Initial: 20000
+        min_iter = 20000 if is_initial_timestep else 6000 # Initial: 20000
         window_size = 100  # Window for moving average
         patience = 5  # Number of windows to wait for improvement
         percent_tol = 1e-7 # Convergence tolerance as a percentage
