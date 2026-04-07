@@ -14,4 +14,4 @@ source ~/.bashrc
 
 conda activate 3dg
 
-python render.py
+python render.py --exp-name sphere-bounce-5

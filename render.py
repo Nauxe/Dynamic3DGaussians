@@ -12,11 +12,14 @@ from PIL import Image
 from helpers import setup_camera
 
 # image size & camera clipping planes
-w, h = 640, 360
+# w, h = 640, 360
+# near, far = 0.01, 100.0
+w, h = 625, 625
 near, far = 0.01, 100.0
 
 # output method name
-METHOD = "ours"
+# METHOD = "ours"
+METHOD = "ours-625x625"
 
 
 def load_scene_data(seq: str, exp: str, out_dir: Path) -> list[dict]:
@@ -134,14 +137,14 @@ if __name__ == "__main__":
     parser = ArgumentParser(
         description="Render every (t, view) and pair with GT for evaluation"
     )
-    parser.add_argument("--exp-name", type=str, default="pretrained")
+    parser.add_argument("--exp-name", type=str, default="exp1")
     parser.add_argument("--output-dir", type=Path, default=Path("./output"))
     parser.add_argument("--data-dir", type=Path, default=Path("./data"))
     parser.add_argument(
         "--dataset",
         type=str,
-        default="basketball",
-        choices=["basketball", "boxes", "football", "juggle", "softball", "tennis"],
+        default="sphere-bounce-5",
+        choices=["sphere-bounce-5", "basketball", "boxes", "football", "juggle", "softball", "tennis"],
         help="Name of the dataset to use for training (e.g., basketball, boxes, etc.)",
     )
     args = parser.parse_args()
