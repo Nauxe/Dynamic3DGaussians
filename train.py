@@ -110,7 +110,7 @@ def get_loss(params, curr_data, variables, is_initial_timestep):
                                             variables["neighbor_weight"])
 
         curr_offset_mag = torch.sqrt((curr_offset ** 2).sum(-1) + 1e-20)
-        # losses['iso'] = weighted_l2_loss_v1(curr_offset_mag, variables["neighbor_dist"], variables["neighbor_weight"])
+        losses['iso'] = weighted_l2_loss_v1(curr_offset_mag, variables["neighbor_dist"], variables["neighbor_weight"])
 
         # losses['floor'] = torch.clamp(fg_pts[:, 1], min=0).mean()
         #
