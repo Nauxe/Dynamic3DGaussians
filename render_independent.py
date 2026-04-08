@@ -17,39 +17,7 @@ near, far = 0.01, 100.0
 METHOD = "ours-independent-625x625"
 
 
-def load_scene_data(seq: str, exp: str, out_dir: Path) -> list[dict]:
-    """
-    Load per-timestep Gaussian params from params.npz,
-    return a list of length T where each entry is the dict
-    the renderer expects for that timestep.
-    """
-    npz_path = out_dir / exp / seq / "params.npz"
-    raw = dict(np.load(npz_path))
-    params = {k: torch.tensor(v).cuda().float() for k, v in raw.items()}
-
-    T = params["means3D"].shape[0]
-    scene = []
-    for t in range(T):
-        scene.append(
-            {
-                "means3D": params["means3D"][t],
-                "colors_precomp": params["rgb_colors"][t],
-                "rotations": torch.nn.functional.normalize(
-                    params["unnorm_rotations"][t]
-                ),
-                "opacities": torch.sigmoid(params["logit_opacities"]),
-                "scales": torch.exp(params["log_scales"]),
-                "means2D": torch.zeros_like(params["means3D"][0], device="cuda"),
-            }
-        )
-    return scene
-
-
 def tensor_to_pil(im: torch.Tensor) -> Image.Image:
-    """
-    Convert a [C,H,W] float32 tensor with values in [0,1]
-    into a PIL Image (uint8 RGB).
-    """
     arr = (
         (torch.permute(im, (1, 2, 0)).cpu().numpy() * 255.0)
         .clip(0, 255)
@@ -58,14 +26,39 @@ def tensor_to_pil(im: torch.Tensor) -> Image.Image:
     return Image.fromarray(arr)
 
 
+def load_scene_data(seq: str, exp: str, out_dir: Path):
+    """
+    Load per-timestep scene parameters from independent training output.
+    Each timestep is saved in its own folder: timestep_0/params.npz, timestep_1/params.npz, etc.
+    """
+    base_dir = out_dir / exp / seq
+    scene = []
+    t = 0
+    
+    while True:
+        timestep_dir = base_dir / f"timestep_{t}"
+        npz_path = timestep_dir / "params.npz"
+        
+        if not npz_path.exists():
+            break
+        
+        raw = dict(np.load(npz_path, allow_pickle=True))
+        params = {k: torch.tensor(v).cuda().float() for k, v in raw.items()}
+        
+        scene.append({
+            "means3D": params["means3D"],
+            "colors_precomp": params["rgb_colors"],
+            "rotations": torch.nn.functional.normalize(params["unnorm_rotations"]),
+            "opacities": torch.sigmoid(params["logit_opacities"]),
+            "scales": torch.exp(params["log_scales"]),
+            "means2D": torch.zeros_like(params["means3D"], device="cuda"),
+        })
+        t += 1
+    
+    return scene
+
+
 def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
-    """
-    For each (timestep, view) in train_meta.json:
-      1. grab scene[t]
-      2. render with that view's (k, w2c)
-      3. save to .../test/METHOD/renders/<t>_<c>.png
-      4. copy GT from data_dir/.../ims/<fn> → .../test/METHOD/gt/<t>_<c>.png
-    """
     scene = load_scene_data(seq, exp, out_dir)
 
     meta_path = data_dir / seq / "train_meta.json"
@@ -111,7 +104,7 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
         dst = gt_dir / name
         shutil.copy(src, dst)
 
-        print(f"Saved render → {renders_dir/name}    GT → {gt_dir/name}")
+        print(f"Saved render -> {renders_dir/name}    GT -> {gt_dir/name}")
 
     with open(fps_path, 'w') as f:
         total_time = sum(timings)
@@ -122,9 +115,9 @@ def render_and_save(seq: str, exp: str, out_dir: Path, data_dir: Path):
 
 if __name__ == "__main__":
     parser = ArgumentParser(
-        description="Render every (t, view) from independently trained timesteps"
+        description="Render independent training outputs"
     )
-    parser.add_argument("--exp-name", type=str, default="exp1")
+    parser.add_argument("--exp-name", type=str, default="sphere-bounce-5")
     parser.add_argument("--output-dir", type=Path, default=Path("./output-indep"))
     parser.add_argument("--data-dir", type=Path, default=Path("./data"))
     parser.add_argument(
@@ -132,10 +125,9 @@ if __name__ == "__main__":
         type=str,
         default="sphere-bounce-5",
         choices=["sphere-bounce-5", "basketball", "boxes", "football", "juggle", "softball", "tennis"],
-        help="Name of the dataset to use for training (e.g., basketball, boxes, etc.)",
+        help="Name of the dataset",
     )
     args = parser.parse_args()
 
     print(f"\n=== Sequence: {args.dataset} ===", flush=True)
-
     render_and_save(args.dataset, args.exp_name, args.output_dir, args.data_dir)
