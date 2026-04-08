@@ -100,3 +100,10 @@ def save_params(output_params, seq, exp, output_dir):
             to_save[k] = output_params[0][k]
     os.makedirs(f"{output_dir}/{exp}/{seq}", exist_ok=True)
     np.savez(f"{output_dir}/{exp}/{seq}/params", **to_save)
+
+
+def save_params_independent(output_params, seq, exp, output_dir):
+    os.makedirs(f"{output_dir}/{exp}/{seq}", exist_ok=True)
+    for t, params in enumerate(output_params):
+        os.makedirs(f"{output_dir}/{exp}/{seq}/timestep_{t}", exist_ok=True)
+        np.savez(f"{output_dir}/{exp}/{seq}/timestep_{t}/params", **params)

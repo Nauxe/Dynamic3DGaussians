@@ -9,7 +9,7 @@ from random import randint
 from tqdm import tqdm
 from diff_gaussian_rasterization import GaussianRasterizer as Renderer
 from helpers import setup_camera, l1_loss_v1, l1_loss_v2, quat_mult, \
-    o3d_knn, params2rendervar, params2cpu, save_params
+    o3d_knn, params2rendervar, params2cpu, save_params_independent
 from external import calc_ssim, calc_psnr, build_rotation, densify, update_params_and_optimizer
 
 
@@ -260,7 +260,7 @@ def train(seq, exp, data_dir, output_dir):
         
         output_params.append(params2cpu(params, is_initial_timestep=True))
 
-    save_params(output_params, seq, exp, output_dir)
+    save_params_independent(output_params, seq, exp, output_dir)
 
 
 
